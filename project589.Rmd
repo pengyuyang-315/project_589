@@ -356,15 +356,25 @@ plot(hornet_elev_rho,xlim = c(0,max(elev)))
 ```{r}
 fors <- DATA$Forest
 hornet_forest_rho <- rhohat(hornet_ppp, fors)
-plot(hornet_forest_rho,xlim = c(0,max(fors)))
 ```
 
 ```{r}
+plot(hornet_forest_rho,xlim = c(0,max(fors)))
+```
+```{r}
 dist_water <- DATA$Dist_Water
-#hornet_dist_rho <- rhohat(hornet_ppp, dist_water)
-#plot(hornet_dist_rho,xlim = c(0,max(dist_water)))
 ```
 
+```{r}
+hornet_dist_rho <- rhohat(hornet_ppp, dist_water)
+```
+
+```{r}
+
+plot(hornet_dist_rho,xlim = c(0,max(dist_water)))
+```
+
+So we could find that the three indicators cannot be linear with hornet distribution, which lead to the formula below.
 ```{r}
 fit <- ppm(hornet_ppp ~ elev + I(elev^2) + fors + I(fors^2) + dist_water + I(dist_water^2), data = DATA)
 
@@ -397,6 +407,7 @@ plot(hornet_ppp,
      cols = "black",
      add = TRUE)
 ```
+
 ### Model Selection
 ```{r}
 AIC(fit_re);AIC(fit) 
@@ -422,5 +433,107 @@ res <- residuals(fit_re)
 plot(res,
      cols = "transparent")
 ```
+We can see some pattern in the residual plot. We still need to check
 
+```{r}
+#Calculate the partial residuals as a function of elevation
+par_res_elev0 <- parres(fit_re, "elev")
+
+#Calculate the relative intensity as a function of for
+par_res_forst0 <- parres(fit_re, "fors")
+
+par_res_water0 <- parres(fit_re,"dist_water")
+#Side by side plotting
+par(mfrow = c(1,3))
+plot(par_res_elev0,
+     legend = FALSE,
+     lwd = 2,
+     main = "",
+     xlab = "Elevation (m)")
+plot(par_res_forst0,
+     legend = FALSE,
+     lwd = 2,
+     main = "",
+     xlab = "Forest")
+plot(par_res_water0,
+     legend = FALSE,
+     lwd = 2,
+     main = "",
+     xlab = "Distance to Water")
+```
+The plots show the model cannot fit the data well.
+
+```{r}
+library(splines)
+
+#Fit the PPP model
+fit_smooth <- ppm(hornet_ppp ~ bs(elev,7) + bs(fors, 7) + bs(dist_water,7), data = DATA, use.gam = TRUE)
+
+fit_smooth
+```
+```{r}
+coef(summary(fit_smooth))
+```
+
+
+```{r}
+#Calculate the partial residuals as a function of elevation
+par_res_elev <- parres(fit_smooth, "elev")
+
+#Calculate the relative intensity as a function of for
+par_res_forst <- parres(fit_smooth, "fors")
+
+par_res_water <- parres(fit_smooth,"dist_water")
+#Side by side plotting
+par(mfrow = c(1,3))
+plot(par_res_elev,
+     legend = FALSE,
+     lwd = 2,
+     main = "",
+     xlab = "Elevation (m)")
+plot(par_res_forst,
+     legend = FALSE,
+     lwd = 2,
+     main = "",
+     xlab = "Forest")
+plot(par_res_water,
+     legend = FALSE,
+     lwd = 2,
+     main = "",
+     xlab = "Distance to Water")
+```
+It is not good, but better than previous one.
+
+```{r}
+AIC(fit_re);AIC(fit_smooth)
+```
+
+```{r}
+BIC(fit_re);BIC(fit_smooth)
+```
+
+```{r}
+anova(fit_re, fit_smooth, test = "LRT")
+```
+The ANOVA results indicate that Model 2 has significantly better fit to the data than Model 1, as evidenced by the large difference in deviance (516.81) and the highly significant p-value (< 2.2e-16), which is well below any conventional significance level.
+All lines of evidence point towards these more complex models being a better fit to the data. The final model is too long to write down, but we can visualise the predictions just as before.
+
+```{r}
+#Plot the model predictions
+plot(fit_smooth,
+     se = FALSE,
+     superimpose = FALSE,
+     main = "Estimated Hornet intensity")
+
+plot(hornet_ppp,
+     pch = 16,
+     cex = 0.6,
+     cols = "white",
+     add = TRUE)
+plot(hornet_ppp,
+     pch = 16,
+     cex = 0.5,
+     cols = "black",
+     add = TRUE)
+```
 
