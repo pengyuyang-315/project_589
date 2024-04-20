@@ -374,24 +374,37 @@ hornet_dist_rho <- rhohat(hornet_ppp, dist_water)
 plot(hornet_dist_rho,xlim = c(0,max(dist_water)))
 ```
 
+```{r}
+hfi <- DATA$HFI
+```
+
+
 So we could find that the three indicators cannot be linear with hornet distribution, which lead to the formula below.
 ```{r}
-fit <- ppm(hornet_ppp ~ elev + I(elev^2) + fors + I(fors^2) + dist_water + I(dist_water^2), data = DATA)
+fit <- ppm(hornet_ppp ~ elev  + fors  + dist_water +  hfi , data = DATA)
 
 fit
 
 ```
-From the Ztest, we'd better remove fors^2
-```{r}
-fit_re <- ppm(hornet_ppp ~ elev + I(elev^2) + fors + dist_water + I(dist_water^2), data = DATA)
+From the Ztest, we'd better remove forest
 
-fit_re
+```{r}
+fit_1 <- ppm(hornet_ppp ~ elev +  dist_water + hfi, data = DATA)
+
+fit_1
 ```
+
+```{r}
+fit_2 <- ppm(hornet_ppp ~ elev + I(elev^2)+ dist_water + hfi + I(hfi^2), data = DATA)
+
+fit_2
+```
+
 The coefficients are all statistically significant.
 
 ```{r}
 #Plot the model predictions
-plot(fit_re,
+plot(fit_2,
      se = FALSE,
      superimpose = FALSE)
 
@@ -410,39 +423,44 @@ plot(hornet_ppp,
 
 ### Model Selection
 ```{r}
-AIC(fit_re);AIC(fit) 
+AIC(fit_2);AIC(fit_1) 
 ```
 
 ```{r}
-BIC(fit_re); BIC(fit)
+BIC(fit_2); BIC(fit_1)
 ```
 We could find that AIC and BIC fall down when we remove one feature. So the extra complexity is not well supported by the data.
 
 ### Model Validation
 ```{r}
 #Run the quadrat test
-quadrat.test(fit_re, nx = 10, ny = 10)
+quadrat.test(fit_2, nx = 10, ny = 10)
 ```
 The small p value tells us that there’s a significant deviation from our model’s predictions. While this is useful for suggesting that our model has room for improvement, it provides us with no direction on how to do so (e.g., missing parameters, model mispecification (e.g., polynomial vs. linear), a lack of independence, non-stationarity, etc…).
 
 ```{r}
 #Calculate the residuals
-res <- residuals(fit_re)
+res <- residuals(fit_2)
 
-#Visualise
-plot(res,
-     cols = "transparent")
+na_indexes <- which(is.na(res$val))
+# If you need to exclude NA values explicitly
+if (length(na_indexes) > 0) {
+  res <- res[-na_indexes]
+  plot(res, cols='transparent')
+} else {
+  plot(res, cols='transparent')
+}
 ```
 We can see some pattern in the residual plot. We still need to check
 
 ```{r}
 #Calculate the partial residuals as a function of elevation
-par_res_elev0 <- parres(fit_re, "elev")
+par_res_elev0 <- parres(fit_2, "elev")
 
 #Calculate the relative intensity as a function of for
-par_res_forst0 <- parres(fit_re, "fors")
+par_res_hfi0 <- parres(fit_2, "hfi")
 
-par_res_water0 <- parres(fit_re,"dist_water")
+par_res_water0 <- parres(fit_2,"dist_water")
 #Side by side plotting
 par(mfrow = c(1,3))
 plot(par_res_elev0,
@@ -450,7 +468,7 @@ plot(par_res_elev0,
      lwd = 2,
      main = "",
      xlab = "Elevation (m)")
-plot(par_res_forst0,
+plot(par_res_hfi0,
      legend = FALSE,
      lwd = 2,
      main = "",
@@ -461,13 +479,13 @@ plot(par_res_water0,
      main = "",
      xlab = "Distance to Water")
 ```
-The plots show the model cannot fit the data well.
+The plot shows that each feature could explain the intensity well.
 
 ```{r}
 library(splines)
 
 #Fit the PPP model
-fit_smooth <- ppm(hornet_ppp ~ bs(elev,7) + bs(fors, 7) + bs(dist_water,7), data = DATA, use.gam = TRUE)
+fit_smooth <- ppm(hornet_ppp ~ bs(elev,4) + bs(hfi, 7) + bs(dist_water,2), data = DATA, use.gam = TRUE)
 
 fit_smooth
 ```
@@ -481,7 +499,7 @@ coef(summary(fit_smooth))
 par_res_elev <- parres(fit_smooth, "elev")
 
 #Calculate the relative intensity as a function of for
-par_res_forst <- parres(fit_smooth, "fors")
+par_res_hfi <- parres(fit_smooth, "hfi")
 
 par_res_water <- parres(fit_smooth,"dist_water")
 #Side by side plotting
@@ -491,11 +509,11 @@ plot(par_res_elev,
      lwd = 2,
      main = "",
      xlab = "Elevation (m)")
-plot(par_res_forst,
+plot(par_res_hfi,
      legend = FALSE,
      lwd = 2,
      main = "",
-     xlab = "Forest")
+     xlab = "HFI")
 plot(par_res_water,
      legend = FALSE,
      lwd = 2,
@@ -505,18 +523,31 @@ plot(par_res_water,
 It is not good, but better than previous one.
 
 ```{r}
-AIC(fit_re);AIC(fit_smooth)
+AIC(fit_2);AIC(fit_smooth)
 ```
 
 ```{r}
-BIC(fit_re);BIC(fit_smooth)
+BIC(fit_2);BIC(fit_smooth)
 ```
 
 ```{r}
-anova(fit_re, fit_smooth, test = "LRT")
+anova(fit_2, fit_smooth, test = "LRT")
 ```
 The ANOVA results indicate that Model 2 has significantly better fit to the data than Model 1, as evidenced by the large difference in deviance (516.81) and the highly significant p-value (< 2.2e-16), which is well below any conventional significance level.
 All lines of evidence point towards these more complex models being a better fit to the data. The final model is too long to write down, but we can visualise the predictions just as before.
+```{r}
+#Calculate the residuals
+res1 <- residuals(fit_smooth)
+
+na_indexes1 <- which(is.na(res1$val))
+# If you need to exclude NA values explicitly
+if (length(na_indexes1) > 0) {
+  res1 <- res[-na_indexes1]
+  plot(res1, cols='transparent')
+} else {
+  plot(res1, cols='transparent')
+}
+```
 
 ```{r}
 #Plot the model predictions
